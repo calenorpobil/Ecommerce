@@ -1,0 +1,37 @@
+# ── Secretos y variables de entorno ──────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# ── Claves privadas y wallets ─────────────────────────────────────────────────
+*.key
+*.pem
+keystore/
+wallet.json
+
+# ── Dependencias ──────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Builds de Next.js ─────────────────────────────────────────────────────────
+.next/
+out/
+
+# ── Builds de Foundry ─────────────────────────────────────────────────────────
+cache/
+out/
+broadcast/
+lib/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Sistema operativo ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Otros archivos y carpetas que no deseas subir a Git ───────────────────────
+.claude/
+docs*guia/
