@@ -95,9 +95,7 @@ echo -e "${GREEN}✅ EuroToken: ${EURO_TOKEN_ADDRESS}${NC}"
 echo ""
 
 # ─────────────────────────────────────────
-# 2. Deploy EcommerceMain + initialize()
-# forge script no se usa aquí: el contrato supera EIP-170 (51k > 24k bytes)
-# y forge script pide confirmación interactiva. forge create no tiene ese check.
+# 2. Deploy EcommerceMain
 # ─────────────────────────────────────────
 echo -e "${BLUE}[2/3] Desplegando EcommerceMain...${NC}"
 cd "${SCRIPT_DIR}/sc-ecommerce"
@@ -117,22 +115,7 @@ if [ -z "$ECOMMERCE_ADDRESS" ]; then
     exit 1
 fi
 
-echo -e "${BLUE}  Llamando initialize()...${NC}"
-cast send --rpc-url ${RPC_URL} \
-    --private-key ${PRIVATE_KEY} \
-    --gas-limit 15000000 \
-    ${ECOMMERCE_ADDRESS} "initialize()" > /dev/null 2>&1
-
-# Verificar que initialize() completó (shoppingCart debe ser != address(0))
-CART_ADDR=$(cast call --rpc-url ${RPC_URL} ${ECOMMERCE_ADDRESS} "shoppingCart()(address)" 2>/dev/null | tr -d '\r')
-if [ "$CART_ADDR" = "0x0000000000000000000000000000000000000000" ] || [ -z "$CART_ADDR" ]; then
-    echo -e "${RED}❌ initialize() falló (shoppingCart es address(0))${NC}"
-    exit 1
-fi
-
-PAYMENT_GATEWAY_ADDRESS=$(cast call --rpc-url ${RPC_URL} ${ECOMMERCE_ADDRESS} "paymentGateway()(address)" | tr -d '\r')
 echo -e "${GREEN}✅ EcommerceMain:  ${ECOMMERCE_ADDRESS}${NC}"
-echo -e "${GREEN}✅ PaymentGateway: ${PAYMENT_GATEWAY_ADDRESS}${NC}"
 echo ""
 
 # ─────────────────────────────────────────
@@ -153,7 +136,7 @@ echo -e "${GREEN}  ✅ stablecoin/compra-stableboin/.env.local${NC}"
 cat > "${PASARELA_ENV}" << EOF
 NEXT_PUBLIC_EUROTOKEN_ADDRESS=${EURO_TOKEN_ADDRESS}
 NEXT_PUBLIC_ECOMMERCE_ADDRESS=${ECOMMERCE_ADDRESS}
-NEXT_PUBLIC_PAYMENT_GATEWAY_ADDRESS=${PAYMENT_GATEWAY_ADDRESS}
+NEXT_PUBLIC_PAYMENT_GATEWAY_ADDRESS=${ECOMMERCE_ADDRESS}
 NEXT_PUBLIC_RPC_URL=${RPC_URL}
 EOF
 echo -e "${GREEN}  ✅ stablecoin/pasarela-de-pago/.env.local${NC}"
@@ -190,7 +173,6 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "  EuroToken:        ${EURO_TOKEN_ADDRESS}"
 echo -e "  EcommerceMain:    ${ECOMMERCE_ADDRESS}"
-echo -e "  PaymentGateway:   ${PAYMENT_GATEWAY_ADDRESS}"
 echo -e "  Owner/Deployer:   ${DEPLOYER}"
 echo ""
 echo -e "Para iniciar las apps:"

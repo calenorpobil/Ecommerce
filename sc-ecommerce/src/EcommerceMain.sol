@@ -1,23 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CompanyRegistry} from "./CompanyRegistry.sol";
-import {ProductCatalog} from "./ProductCatalog.sol";
-import {CustomerRegistry} from "./CustomerRegistry.sol";
-import {ShoppingCart} from "./ShoppingCart.sol";
-import {InvoiceSystem} from "./InvoiceSystem.sol";
-import {PaymentGateway} from "./PaymentGateway.sol";
+import {CompanyLib} from "./libraries/CompanyLib.sol";
+import {ProductLib} from "./libraries/ProductLib.sol";
+import {CustomerLib} from "./libraries/CustomerLib.sol";
+import {CartLib} from "./libraries/CartLib.sol";
+import {InvoiceLib} from "./libraries/InvoiceLib.sol";
+import {PaymentLib} from "./libraries/PaymentLib.sol";
 
 contract EcommerceMain {
-    CompanyRegistry public companyRegistry;
-    ProductCatalog public productCatalog;
-    CustomerRegistry public customerRegistry;
-    ShoppingCart public shoppingCart;
-    InvoiceSystem public invoiceSystem;
-    PaymentGateway public paymentGateway;
+    using CompanyLib for CompanyLib.Data;
+    using ProductLib for ProductLib.Data;
+    using CustomerLib for CustomerLib.Data;
+    using CartLib for CartLib.Data;
+    using InvoiceLib for InvoiceLib.Data;
+
+    // ─── Storage ───────────────────────────────────────────────────────────
+    CompanyLib.Data private _companies;
+    ProductLib.Data private _products;
+    CustomerLib.Data private _customers;
+    CartLib.Data private _carts;
+    InvoiceLib.Data private _invoices;
 
     address public owner;
+    address private _euroToken;
 
+    // ─── Events ────────────────────────────────────────────────────────────
     event CompanyRegistered(uint256 indexed companyId, address indexed companyAddress);
     event ProductAdded(uint256 indexed productId, uint256 indexed companyId);
     event CartUpdated(address indexed customer);
@@ -25,6 +33,7 @@ contract EcommerceMain {
     event PaymentProcessed(uint256 indexed invoiceId, uint256 amount);
     event Refunded(uint256 indexed invoiceId);
 
+    // ─── Errors ────────────────────────────────────────────────────────────
     error OnlyOwner();
     error NotAuthorized();
     error CompanyInactive();
@@ -34,38 +43,15 @@ contract EcommerceMain {
     error MixedCompanies();
     error InvoiceAlreadyPaid();
     error NotInvoiceOwner();
-    error AlreadyInitialized();
-    error NotInitialized();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert OnlyOwner();
         _;
     }
 
-    modifier whenInitialized() {
-        if (address(companyRegistry) == address(0)) revert NotInitialized();
-        _;
-    }
-
-    address private _euroTokenAddress;
-    bool public initialized;
-
     constructor(address euroTokenAddress) {
         owner = msg.sender;
-        _euroTokenAddress = euroTokenAddress;
-    }
-
-    // Deploys the 6 sub-contracts. Called once after constructor to keep
-    // constructor gas low enough for reliable RPC deployment.
-    function initialize() external onlyOwner {
-        if (initialized) revert AlreadyInitialized();
-        initialized = true;
-        companyRegistry = new CompanyRegistry(address(this));
-        productCatalog = new ProductCatalog(address(this));
-        customerRegistry = new CustomerRegistry(address(this));
-        shoppingCart = new ShoppingCart(address(this));
-        invoiceSystem = new InvoiceSystem(address(this));
-        paymentGateway = new PaymentGateway(address(this), _euroTokenAddress);
+        _euroToken = euroTokenAddress;
     }
 
     // ─── Company ───────────────────────────────────────────────────────────
@@ -76,14 +62,14 @@ contract EcommerceMain {
         string calldata description,
         string calldata taxId
     ) external returns (uint256 companyId) {
-        companyId = companyRegistry.registerCompany(companyAddress, name, description, taxId);
+        companyId = _companies.register(companyAddress, name, description, taxId);
         emit CompanyRegistered(companyId, companyAddress);
     }
 
     function deactivateCompany(uint256 companyId) external {
-        CompanyRegistry.Company memory c = companyRegistry.getCompany(companyId);
+        CompanyLib.Company memory c = _companies.get(companyId);
         if (msg.sender != owner && msg.sender != c.companyAddress) revert NotAuthorized();
-        companyRegistry.deactivateCompany(companyId);
+        _companies.deactivate(companyId);
     }
 
     // ─── Products ──────────────────────────────────────────────────────────
@@ -96,11 +82,11 @@ contract EcommerceMain {
         uint256 stock,
         string calldata ipfsImageHash
     ) external returns (uint256 productId) {
-        CompanyRegistry.Company memory c = companyRegistry.getCompany(companyId);
+        CompanyLib.Company memory c = _companies.get(companyId);
         if (!c.isActive) revert CompanyInactive();
         if (msg.sender != c.companyAddress && msg.sender != owner) revert NotAuthorized();
 
-        productId = productCatalog.addProduct(companyId, name, description, price, stock, ipfsImageHash);
+        productId = _products.add(companyId, name, description, price, stock, ipfsImageHash);
         emit ProductAdded(productId, companyId);
     }
 
@@ -112,62 +98,62 @@ contract EcommerceMain {
         string calldata ipfsImageHash
     ) external {
         _requireCompanyOwner(productId);
-        productCatalog.updateProduct(productId, name, description, price, ipfsImageHash);
+        _products.update(productId, name, description, price, ipfsImageHash);
     }
 
     function updateStock(uint256 productId, uint256 newStock) external {
         _requireCompanyOwner(productId);
-        productCatalog.updateStock(productId, newStock);
+        _products.setStock(productId, newStock);
     }
 
     function deactivateProduct(uint256 productId) external {
         _requireCompanyOwner(productId);
-        productCatalog.deactivateProduct(productId);
+        _products.deactivate(productId);
     }
 
     // ─── Cart ──────────────────────────────────────────────────────────────
 
     function addToCart(uint256 productId, uint256 quantity) external {
-        ProductCatalog.Product memory p = productCatalog.getProduct(productId);
+        ProductLib.Product memory p = _products.get(productId);
         if (!p.isActive) revert ProductInactive();
         if (p.stock < quantity) revert InsufficientStock();
 
-        customerRegistry.registerOrGet(msg.sender);
-        shoppingCart.addToCart(msg.sender, productId, quantity, p.price);
+        _customers.registerOrGet(msg.sender);
+        _carts.add(msg.sender, productId, quantity, p.price);
         emit CartUpdated(msg.sender);
     }
 
     function updateCartQuantity(uint256 productId, uint256 quantity) external {
-        ProductCatalog.Product memory p = productCatalog.getProduct(productId);
+        ProductLib.Product memory p = _products.get(productId);
         if (p.stock < quantity) revert InsufficientStock();
-        shoppingCart.updateQuantity(msg.sender, productId, quantity);
+        _carts.updateQuantity(msg.sender, productId, quantity);
         emit CartUpdated(msg.sender);
     }
 
     function removeFromCart(uint256 productId) external {
-        shoppingCart.removeFromCart(msg.sender, productId);
+        _carts.remove(msg.sender, productId);
         emit CartUpdated(msg.sender);
     }
 
     function calculateTotal() external view returns (uint256) {
-        return shoppingCart.calculateTotal(msg.sender);
+        return _carts.calculateTotal(msg.sender);
     }
 
     // ─── Invoice ───────────────────────────────────────────────────────────
 
     function createInvoice(uint256 companyId) external returns (uint256 invoiceId) {
-        ShoppingCart.CartItem[] memory items = shoppingCart.getCart(msg.sender);
+        CartLib.CartItem[] memory items = _carts.getCart(msg.sender);
         if (items.length == 0) revert EmptyCart();
 
-        InvoiceSystem.InvoiceItem[] memory invoiceItems = new InvoiceSystem.InvoiceItem[](items.length);
+        InvoiceLib.InvoiceItem[] memory invoiceItems = new InvoiceLib.InvoiceItem[](items.length);
         uint256 total = 0;
 
         for (uint256 i = 0; i < items.length; i++) {
-            ProductCatalog.Product memory p = productCatalog.getProduct(items[i].productId);
+            ProductLib.Product memory p = _products.get(items[i].productId);
             if (p.companyId != companyId) revert MixedCompanies();
 
             uint256 lineTotal = items[i].quantity * items[i].unitPrice;
-            invoiceItems[i] = InvoiceSystem.InvoiceItem({
+            invoiceItems[i] = InvoiceLib.InvoiceItem({
                 productId: items[i].productId,
                 productName: p.name,
                 quantity: items[i].quantity,
@@ -177,8 +163,8 @@ contract EcommerceMain {
             total += lineTotal;
         }
 
-        invoiceId = invoiceSystem.createInvoice(msg.sender, companyId, invoiceItems, total);
-        shoppingCart.clearCart(msg.sender);
+        invoiceId = _invoices.create(msg.sender, companyId, invoiceItems, total);
+        _carts.clear(msg.sender);
 
         emit InvoiceCreated(invoiceId, msg.sender, companyId);
     }
@@ -186,77 +172,89 @@ contract EcommerceMain {
     // ─── Payment ───────────────────────────────────────────────────────────
 
     function processPayment(uint256 invoiceId) external {
-        InvoiceSystem.Invoice memory inv = invoiceSystem.getInvoice(invoiceId);
+        InvoiceLib.Invoice memory inv = _invoices.get(invoiceId);
         if (inv.isPaid) revert InvoiceAlreadyPaid();
         if (inv.customerAddress != msg.sender) revert NotInvoiceOwner();
 
-        CompanyRegistry.Company memory company = companyRegistry.getCompany(inv.companyId);
+        CompanyLib.Company memory company = _companies.get(inv.companyId);
 
-        paymentGateway.processPayment(msg.sender, company.companyAddress, inv.totalAmount);
-        invoiceSystem.markAsPaid(invoiceId, "");
+        PaymentLib.processPayment(_euroToken, msg.sender, company.companyAddress, inv.totalAmount);
+        _invoices.markAsPaid(invoiceId, "");
 
-        InvoiceSystem.InvoiceItem[] memory items = invoiceSystem.getInvoiceItems(invoiceId);
+        InvoiceLib.InvoiceItem[] memory items = _invoices.getItems(invoiceId);
         for (uint256 i = 0; i < items.length; i++) {
-            productCatalog.decreaseStock(items[i].productId, items[i].quantity);
+            _products.decreaseStock(items[i].productId, items[i].quantity);
         }
 
-        customerRegistry.recordPurchase(msg.sender, inv.totalAmount);
+        _customers.recordPurchase(msg.sender, inv.totalAmount);
         emit PaymentProcessed(invoiceId, inv.totalAmount);
     }
 
     function refund(uint256 invoiceId) external {
-        InvoiceSystem.Invoice memory inv = invoiceSystem.getInvoice(invoiceId);
-        CompanyRegistry.Company memory company = companyRegistry.getCompany(inv.companyId);
+        InvoiceLib.Invoice memory inv = _invoices.get(invoiceId);
+        CompanyLib.Company memory company = _companies.get(inv.companyId);
         if (msg.sender != company.companyAddress && msg.sender != owner) revert NotAuthorized();
 
-        paymentGateway.refund(inv.customerAddress, company.companyAddress, inv.totalAmount);
-        invoiceSystem.markAsRefunded(invoiceId);
+        PaymentLib.refund(_euroToken, inv.customerAddress, company.companyAddress, inv.totalAmount);
+        _invoices.markAsRefunded(invoiceId);
         emit Refunded(invoiceId);
     }
 
     // ─── Views ─────────────────────────────────────────────────────────────
 
-    function getCompany(uint256 companyId) external view returns (CompanyRegistry.Company memory) {
-        return companyRegistry.getCompany(companyId);
+    function getCompany(uint256 companyId) external view returns (CompanyLib.Company memory) {
+        return _companies.get(companyId);
     }
 
     function getCompanyIdByAddress(address companyAddress) external view returns (uint256) {
-        return companyRegistry.getCompanyIdByAddress(companyAddress);
+        return _companies.getIdByAddress(companyAddress);
     }
 
-    function getProduct(uint256 productId) external view returns (ProductCatalog.Product memory) {
-        return productCatalog.getProduct(productId);
+    function getProduct(uint256 productId) external view returns (ProductLib.Product memory) {
+        return _products.get(productId);
     }
 
     function getProductsByCompany(uint256 companyId) external view returns (uint256[] memory) {
-        return productCatalog.getProductsByCompany(companyId);
+        return _products.getByCompany(companyId);
     }
 
-    function getCart() external view returns (ShoppingCart.CartItem[] memory) {
-        return shoppingCart.getCart(msg.sender);
+    function getCart() external view returns (CartLib.CartItem[] memory) {
+        return _carts.getCart(msg.sender);
     }
 
-    function getInvoice(uint256 invoiceId) external view returns (InvoiceSystem.Invoice memory) {
-        return invoiceSystem.getInvoice(invoiceId);
+    function getInvoice(uint256 invoiceId) external view returns (InvoiceLib.Invoice memory) {
+        return _invoices.get(invoiceId);
     }
 
-    function getInvoiceItems(uint256 invoiceId) external view returns (InvoiceSystem.InvoiceItem[] memory) {
-        return invoiceSystem.getInvoiceItems(invoiceId);
+    function getInvoiceItems(uint256 invoiceId) external view returns (InvoiceLib.InvoiceItem[] memory) {
+        return _invoices.getItems(invoiceId);
     }
 
     function getCustomerInvoices(address customer) external view returns (uint256[] memory) {
-        return invoiceSystem.getCustomerInvoices(customer);
+        return _invoices.getCustomerInvoices(customer);
     }
 
-    function getCustomer(address customer) external view returns (CustomerRegistry.Customer memory) {
-        return customerRegistry.getCustomer(customer);
+    function getCustomer(address customer) external view returns (CustomerLib.Customer memory) {
+        return _customers.get(customer);
+    }
+
+    function getAllCompanyIds() external view returns (uint256[] memory) {
+        return _companies.ids;
+    }
+
+    function getCompanyInvoices(uint256 companyId) external view returns (uint256[] memory) {
+        return _invoices.getCompanyInvoices(companyId);
+    }
+
+    function getAllCustomers() external view returns (address[] memory) {
+        return _customers.addresses;
     }
 
     // ─── Internal ──────────────────────────────────────────────────────────
 
     function _requireCompanyOwner(uint256 productId) internal view {
-        uint256 companyId = productCatalog.getProductCompanyId(productId);
-        CompanyRegistry.Company memory c = companyRegistry.getCompany(companyId);
+        ProductLib.Product memory p = _products.get(productId);
+        CompanyLib.Company memory c = _companies.get(p.companyId);
         if (msg.sender != c.companyAddress && msg.sender != owner) revert NotAuthorized();
     }
 }

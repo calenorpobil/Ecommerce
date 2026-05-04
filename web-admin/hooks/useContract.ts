@@ -1,12 +1,7 @@
 'use client'
 
 import { ethers } from 'ethers'
-import {
-  ECOMMERCE_MAIN_ABI,
-  COMPANY_REGISTRY_ABI,
-  INVOICE_SYSTEM_ABI,
-  CUSTOMER_REGISTRY_ABI,
-} from '@/lib/abi'
+import { ECOMMERCE_MAIN_ABI } from '@/lib/abi'
 import { ECOMMERCE_MAIN_ADDRESS, RPC_URL } from '@/lib/addresses'
 
 export function getProvider() {
@@ -27,16 +22,10 @@ export async function getWriteContract() {
 }
 
 export async function getSubContracts() {
-  const main = getReadContract()
-  const provider = getProvider()
-  const [companyRegistryAddr, invoiceSystemAddr, customerRegistryAddr] = await Promise.all([
-    main.companyRegistry(),
-    main.invoiceSystem(),
-    main.customerRegistry(),
-  ])
+  const contract = getReadContract()
   return {
-    companyRegistry: new ethers.Contract(companyRegistryAddr, COMPANY_REGISTRY_ABI, provider),
-    invoiceSystem: new ethers.Contract(invoiceSystemAddr, INVOICE_SYSTEM_ABI, provider),
-    customerRegistry: new ethers.Contract(customerRegistryAddr, CUSTOMER_REGISTRY_ABI, provider),
+    companyRegistry: contract,
+    invoiceSystem: contract,
+    customerRegistry: contract,
   }
 }
