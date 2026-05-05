@@ -19,6 +19,7 @@ COMPRA_ENV="${SCRIPT_DIR}/stablecoin/compra-stableboin/.env.local"
 PASARELA_ENV="${SCRIPT_DIR}/stablecoin/pasarela-de-pago/.env.local"
 ECOMMERCE_ENV="${SCRIPT_DIR}/sc-ecommerce/.env"
 WEB_ADMIN_ENV="${SCRIPT_DIR}/web-admin/.env.local"
+WEB_CUSTOMER_ENV="${SCRIPT_DIR}/web-customer/.env.local"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Stablecoin + Ecommerce Deploy${NC}"
@@ -138,6 +139,7 @@ NEXT_PUBLIC_EUROTOKEN_ADDRESS=${EURO_TOKEN_ADDRESS}
 NEXT_PUBLIC_ECOMMERCE_ADDRESS=${ECOMMERCE_ADDRESS}
 NEXT_PUBLIC_PAYMENT_GATEWAY_ADDRESS=${ECOMMERCE_ADDRESS}
 NEXT_PUBLIC_RPC_URL=${RPC_URL}
+NEXT_PUBLIC_CHAIN_ID=31337
 EOF
 echo -e "${GREEN}  ✅ stablecoin/pasarela-de-pago/.env.local${NC}"
 
@@ -162,6 +164,17 @@ NEXT_PUBLIC_EURO_TOKEN_ADDRESS=${EURO_TOKEN_ADDRESS}
 NEXT_PUBLIC_PINATA_JWT=${PINATA_JWT}
 EOF
 echo -e "${GREEN}  ✅ web-admin/.env.local${NC}"
+
+cat > "${WEB_CUSTOMER_ENV}" << EOF
+NEXT_PUBLIC_CHAIN_ID=31337
+NEXT_PUBLIC_RPC_URL=${RPC_URL}
+NEXT_PUBLIC_ECOMMERCE_MAIN_ADDRESS=${ECOMMERCE_ADDRESS}
+NEXT_PUBLIC_EURO_TOKEN_ADDRESS=${EURO_TOKEN_ADDRESS}
+NEXT_PUBLIC_STRIPE_PUBLIC_KEY=${STRIPE_PK}
+NEXT_PUBLIC_PAYMENT_GATEWAY_URL=http://localhost:6002
+NEXT_PUBLIC_COMPRA_EURT_URL=http://localhost:6001
+EOF
+echo -e "${GREEN}  ✅ web-customer/.env.local${NC}"
 echo ""
 
 # ─────────────────────────────────────────

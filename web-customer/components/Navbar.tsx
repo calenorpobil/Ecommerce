@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 const NAV_LINKS = [
   { href: '/products', label: 'Productos' },
   { href: '/orders', label: 'Mis Pedidos' },
+  { href: '/wallet', label: 'Wallet' },
+  { href: '/profile', label: 'Perfil' },
 ]
 
 export function Navbar() {

@@ -68,6 +68,7 @@ export default function CartPage() {
         merchant_address: companyInfo.companyAddress,
         amount: formatEURT(total),
         invoice: invoiceId.toString(),
+        date: new Date().toISOString().split('T')[0],
         redirect: `${window.location.origin}/orders`,
       })
 
