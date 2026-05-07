@@ -1,0 +1,20 @@
+{
+  "name": "ecommerce-e2e",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:smoke": "playwright test smoke",
+    "test:onchain": "playwright test onchain",
+    "test:edge": "playwright test edge",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^25.6.1",
+    "typescript": "^5.5.0",
+    "viem": "^2.21.0"
+  }
+}
